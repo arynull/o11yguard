@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check src/
+
+  install-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Clean install from source
+        run: |
+          python -m venv /tmp/ci-venv
+          /tmp/ci-venv/bin/pip install --quiet .
+          /tmp/ci-venv/bin/o11yguard --version
+      - name: CLI smoke test (sample / ingest / analyze / budget / plan)
+        run: |
+          export O11YGUARD_DATA_DIR="$(mktemp -d)"
+          OG=/tmp/ci-venv/bin/o11yguard
+          # built-in sample dataset must print valid non-empty JSON
+          $OG sample | python3 -c "import json,sys; d=json.load(sys.stdin); assert d, 'sample empty'"
+          # ingest the sample, then analyze / budget / plan must all succeed
+          $OG sample > /tmp/sample.json
+          $OG ingest /tmp/sample.json --provider generic --batch ci-smoke
+          $OG analyze --top 3 | grep -i -E "total|top" >/dev/null
+          $OG analyze --json | python3 -c "import json,sys; json.load(sys.stdin)"
+          $OG budget set 500 --warn-pct 80
+          set +e; $OG budget status; rc=$?; set -e
+          test "$rc" -eq 0 -o "$rc" -eq 2 -o "$rc" -eq 3
+          $OG plan --format json | python3 -c "import json,sys; d=json.load(sys.stdin); assert isinstance(d, list)"
+          echo "smoke OK"

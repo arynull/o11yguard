@@ -1,0 +1,15 @@
+# local-only: tests, ops files, credentials, scratch state
+tests/
+__pycache__/
+*.egg-info/
+build/
+dist/
+MISSION.md
+SPEC.md
+RUNBOOK.md
+PROGRESS.md
+ERROR_LOG.md
+prompts/
+.telegram.env
+.data-scratch/
+*.db
