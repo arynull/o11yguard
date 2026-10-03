@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 from . import __version__
 from .analyze import format_human, summarize, to_json
 from .ingest import ingest_file
+from .plan import build_plan, format_md, to_yaml, what_if_drop_tag
+from .plan import to_json as plan_to_json
 from .pricing import PER_1K_SERIES_DEFAULT
 from .sample import built_in_sample
 from .store import Store
@@ -35,6 +37,8 @@ DEFAULT_PROVIDER = "datadog"
 DEFAULT_BATCH = "cli"
 DEFAULT_WARN_PCT = 80.0
 DEFAULT_TOP = 5
+DEFAULT_PLAN_TOP = 10
+DEFAULT_SERIES_LIMIT = 20
 
 Handler = Callable[[argparse.Namespace], int]
 ParserFactory = Callable[["_SubParsersAction"], argparse.ArgumentParser]
@@ -144,6 +148,80 @@ def cmd_budget_status(args: argparse.Namespace) -> int:
     return code
 
 
+def cmd_plan(args: argparse.Namespace) -> int:
+    """Print ranked cost-saving recommendations for the stored records."""
+    if args.top < 0:
+        return _fail(f"--top must be >= 0, got {args.top}")
+    with Store() as store:
+        recommendations = build_plan(store, top=args.top)
+    if args.format == "yaml":
+        print(to_yaml(recommendations), end="")
+    elif args.format == "json":
+        print(plan_to_json(recommendations))
+    else:
+        print(format_md(recommendations))
+    return EXIT_OK
+
+
+def cmd_series_list(args: argparse.Namespace) -> int:
+    """List stored series records, optionally filtered by metric prefix."""
+    if args.limit < 0:
+        return _fail(f"--limit must be >= 0, got {args.limit}")
+    with Store() as store:
+        records = store.all_series()
+    if args.metric:
+        records = [
+            record
+            for record in records
+            if str(record.get("metric", "")).startswith(args.metric)
+        ]
+    rows = records[: args.limit]
+
+    if args.json:
+        print(json.dumps(rows, indent=2, sort_keys=True))
+        return EXIT_OK
+
+    if not rows:
+        print("no series stored (nothing ingested yet)")
+        return EXIT_OK
+    width = max(len(str(record.get("metric", ""))) for record in rows)
+    print(f"{'METRIC'.ljust(width)}  {'SERIES':>12}  {'EST. $/MO':>12}  TAGS")
+    for record in rows:
+        metric = str(record.get("metric", ""))
+        tags = ", ".join(str(tag) for tag in record.get("tag_keys") or []) or "-"
+        print(
+            f"{metric.ljust(width)}  "
+            f"{int(record.get('series', 0) or 0):>12,}  "
+            f"{_usd(record.get('monthly_cost_usd', 0.0) or 0.0):>12}  "
+            f"{tags}"
+        )
+    return EXIT_OK
+
+
+def cmd_series_drop_tag(args: argparse.Namespace) -> int:
+    """What-if only: estimate dropping a tag. Never writes to the store."""
+    with Store() as store:
+        try:
+            estimate = what_if_drop_tag(store, args.metric, args.tag)
+        except KeyError:
+            return _fail(f"unknown metric: {args.metric}")
+        except ValueError as exc:
+            return _fail(str(exc))
+    print(
+        f"what-if: drop tag '{estimate['tag']}' from "
+        f"'{estimate['metric']}' (nothing was changed)"
+    )
+    print(f"  series:   {estimate['old_series']:,} -> {estimate['new_series']:,}")
+    print(
+        f"  est. monthly cost: ${_usd(estimate['old_cost_usd'])}"
+        f" -> ${_usd(estimate['new_cost_usd'])}"
+    )
+    print(f"  est. monthly savings: ${_usd(estimate['est_savings_usd'])}")
+    print(f"  note: {estimate['note']}")
+    print("nothing was changed: this command only reports an estimate.")
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------- parsers ---
 # Each factory registers one top-level subcommand and its handler. Adding a
 # new command (e.g. ``plan`` or ``series``) means adding one factory and one
@@ -231,11 +309,75 @@ def add_budget(subparsers: _SubParsersAction) -> argparse.ArgumentParser:
     return parser
 
 
+def add_plan(subparsers: _SubParsersAction) -> argparse.ArgumentParser:
+    """Register the ``plan`` subcommand."""
+    parser = subparsers.add_parser(
+        "plan", help="print ranked cost-saving recommendations"
+    )
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=DEFAULT_PLAN_TOP,
+        help="max recommendations (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["md", "yaml", "json"],
+        default="md",
+        help="output format (default: %(default)s)",
+    )
+    parser.set_defaults(func=cmd_plan)
+    return parser
+
+
+def add_series(subparsers: _SubParsersAction) -> argparse.ArgumentParser:
+    """Register the ``series`` subcommand and its list/drop-tag actions."""
+    parser = subparsers.add_parser(
+        "series", help="inspect stored series and estimate tag changes (read-only)"
+    )
+    actions = parser.add_subparsers(dest="action", metavar="ACTION")
+    parser.set_defaults(
+        func=lambda _args: _fail("series needs an action: list or drop-tag")
+    )
+
+    list_p = actions.add_parser("list", help="list stored series records")
+    list_p.add_argument(
+        "--metric",
+        default="",
+        help="only metrics starting with this prefix (default: all)",
+    )
+    list_p.add_argument(
+        "--limit",
+        type=int,
+        default=DEFAULT_SERIES_LIMIT,
+        help="max rows (default: %(default)s)",
+    )
+    list_p.add_argument(
+        "--json", action="store_true", help="emit JSON instead of a table"
+    )
+    list_p.set_defaults(func=cmd_series_list)
+
+    drop_p = actions.add_parser(
+        "drop-tag",
+        help="what-if only: estimate dropping a tag; nothing was changed",
+        description=(
+            "What-if only: prints the estimated effect of dropping a tag from a "
+            "metric. Nothing was changed and no data is written."
+        ),
+    )
+    drop_p.add_argument("metric", help="exact metric name")
+    drop_p.add_argument("tag", help="tag key that would be dropped")
+    drop_p.set_defaults(func=cmd_series_drop_tag)
+    return parser
+
+
 SUBCOMMANDS: dict[str, ParserFactory] = {
     "sample": add_sample,
     "ingest": add_ingest,
     "analyze": add_analyze,
     "budget": add_budget,
+    "plan": add_plan,
+    "series": add_series,
 }
 
 
