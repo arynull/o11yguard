@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "o11yguard"
+version = "0.1.0"
+description = "Read-only cost control for your observability bill"
+license = { text = "MIT" }
+authors = [{ name = "Ary" }]
+requires-python = ">=3.10"
+dependencies = []
+keywords = ["observability", "cost", "cardinality", "datadog", "budget"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: System :: Monitoring",
+]
+
+[project.urls]
+Homepage = "https://github.com/arynull/o11yguard"
+Repository = "https://github.com/arynull/o11yguard"
+Issues = "https://github.com/arynull/o11yguard/issues"
+
+[project.scripts]
+o11yguard = "o11yguard.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
