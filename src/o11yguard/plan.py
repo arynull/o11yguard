@@ -72,6 +72,15 @@ def build_plan(store: Any, top: int = 10) -> Plan:
                 "risk": f"Dashboards or alerts grouping by '{tag}' on '{metric}' may break.",
             }
 
+        if series >= 10_000 and n <= 1:
+            candidates["rollup"] = {
+                "tag": "",
+                "savings": cost * 0.5,
+                "detail": f"Pre-aggregate '{metric}' (roll up to coarser time buckets): with {series:,} series and only {n} tag key(s), dropping tags cannot cut volume, but aggregation can roughly halve it.",
+                "confidence": "medium",
+                "risk": f"Pre-aggregating '{metric}' loses fine-grained per-series drilldown.",
+            }
+
         if "log" in lname or "event" in lname:
             candidates["move-to-logs"] = {
                 "tag": "",
@@ -111,6 +120,7 @@ def build_plan(store: Any, top: int = 10) -> Plan:
         chosen = None
         for lever in (
             "drop-tag",
+            "rollup",
             "move-to-logs",
             "reduce-retention",
             "sample",

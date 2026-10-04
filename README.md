@@ -8,7 +8,7 @@ o11yguard helps you understand and control metric-cardinality spend:
 
 - Cardinality analysis: totals, top-N cost drivers, and top tag offenders from your stored series.
 - Budget alerts: set a monthly USD budget and check the estimated run rate against it, with CI/cron-friendly exit codes.
-- Ranked action plans: concrete recommendations (drop a tag, shorten retention, sample, move to logs, decommission) ordered by estimated monthly savings, plus what-if estimates for dropping a tag.
+- Ranked action plans: concrete recommendations (drop a tag, pre-aggregate/rollup, shorten retention, sample, move to logs, decommission) ordered by estimated monthly savings, plus what-if estimates for dropping a tag.
 
 Read-only and offline-first: there are no write APIs, no apply command, and no network calls. Every subcommand reads local files or the local SQLite store. You work on exported data (Datadog usage exports or your own CSV/JSON).
 
@@ -27,7 +27,7 @@ or isolated:
 Then:
 
     o11yguard --version
-    # o11yguard 0.1.0
+    # o11yguard 0.1.1
 
 ## Quickstart
 
@@ -190,7 +190,7 @@ Flags:
 - `--top N` (default: `10`): max recommendations. Must be >= 0.
 - `--format md|yaml|json` (default: `md`): `md` renders a markdown table plus a `Total est. savings` line; `yaml` and `json` emit the recommendation list.
 
-Levers, in priority order per metric (at most one recommendation per stored record): `drop-tag`, `move-to-logs`, `reduce-retention`, `sample`, `decommission`. Recommendations with under $1 of estimated savings are omitted. The `drop-tag` saving assumes removing one of `n` tag keys cuts series to `ceil(series ** ((n-1)/n))` (a rough geometric-mean approximation); the percentage savings for the other levers (80/30/50/100%) are planning placeholders, not measured outcomes.
+Levers, in priority order per metric (at most one recommendation per stored record): `drop-tag`, `rollup`, `move-to-logs`, `reduce-retention`, `sample`, `decommission`. Recommendations with under $1 of estimated savings are omitted. The `drop-tag` saving assumes removing one of `n` tag keys cuts series to `ceil(series ** ((n-1)/n))` (a rough geometric-mean approximation); the percentage savings for the other levers (80/30/50/100%) are planning placeholders, not measured outcomes. `rollup` fires for metric families with >= 10,000 series and at most 1 tag key, where dropping a tag cannot help; its 50% saving is a placeholder like `sample`.
 
 ### o11yguard series list
 
@@ -274,7 +274,7 @@ All `--json` output is key-sorted. Money is rounded to 2 decimals; `sample` reco
       {
         "id": str,
         "metric": str,
-        "lever": "drop-tag|reduce-retention|sample|move-to-logs|decommission",
+        "lever": "drop-tag|rollup|reduce-retention|sample|move-to-logs|decommission",
         "detail": str,
         "est_monthly_savings_usd": float,
         "confidence": "low|medium|high",
@@ -345,7 +345,7 @@ Note: argparse usage errors (bad flags) exit 1, so code 2 keeps its breach meani
 
 ## Limitations
 
-v0.1.0 non-goals: applying policies (no auto-remediation, no write path), APM/log/trace cost, multi-currency, hosted dashboards, provider pricing auto-sync. There is no `usage fetch` network command in this version; the tool is fully offline.
+v0.1.1 non-goals: applying policies (no auto-remediation, no write path), APM/log/trace cost, multi-currency, hosted dashboards, provider pricing auto-sync. There is no `usage fetch` network command in this version; the tool is fully offline.
 
 ## License
 
