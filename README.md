@@ -189,8 +189,10 @@ Flags:
 
 - `--top N` (default: `10`): max recommendations. Must be >= 0.
 - `--format md|yaml|json` (default: `md`): `md` renders a markdown table plus a `Total est. savings` line; `yaml` and `json` emit the recommendation list.
+- `--lever LEVER` (repeatable): only show recommendations from the named lever(s). Valid levers: `drop-tag`, `rollup`, `move-to-logs`, `reduce-retention`, `sample`, `decommission`. An unknown lever is an error (exit 1).
+- `--min-savings USD` (default: `0`): only show recommendations with at least this much estimated monthly savings. Must be >= 0.
 
-Levers, in priority order per metric (at most one recommendation per stored record): `drop-tag`, `rollup`, `move-to-logs`, `reduce-retention`, `sample`, `decommission`. Recommendations with under $1 of estimated savings are omitted. The `drop-tag` saving assumes removing one of `n` tag keys cuts series to `ceil(series ** ((n-1)/n))` (a rough geometric-mean approximation); the percentage savings for the other levers (80/30/50/100%) are planning placeholders, not measured outcomes. `rollup` fires for metric families with >= 10,000 series and at most 1 tag key, where dropping a tag cannot help; its 50% saving is a placeholder like `sample`.
+Levers, in priority order per metric (at most one recommendation per stored record): `drop-tag`, `rollup`, `move-to-logs`, `reduce-retention`, `sample`, `decommission`. Recommendations with under $1 of estimated savings are omitted. The `drop-tag` saving assumes removing one of `n` tag keys cuts series to `ceil(series ** ((n-1)/n))` (a rough geometric-mean approximation); the percentage savings for the other levers (80/30/50/100%) are planning placeholders, not measured outcomes. `rollup` fires for metric families with >= 10,000 series and at most 1 tag key, where dropping a tag cannot help; its 50% saving is a placeholder like `sample`. The `--lever` and `--min-savings` flags filter the final ranked list, so they combine with `--top`.
 
 ### o11yguard series list
 

@@ -12,11 +12,21 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Sequence
 from typing import Any
 
 from o11yguard import pricing
 
 Plan = list[dict[str, Any]]
+
+LEVER_NAMES = (
+    "drop-tag",
+    "rollup",
+    "move-to-logs",
+    "reduce-retention",
+    "sample",
+    "decommission",
+)
 
 
 def _money(value: float) -> float:
@@ -118,14 +128,7 @@ def build_plan(store: Any, top: int = 10) -> Plan:
             }
 
         chosen = None
-        for lever in (
-            "drop-tag",
-            "rollup",
-            "move-to-logs",
-            "reduce-retention",
-            "sample",
-            "decommission",
-        ):
+        for lever in LEVER_NAMES:
             if lever in candidates:
                 chosen = (lever, candidates[lever])
                 break
@@ -153,6 +156,21 @@ def build_plan(store: Any, top: int = 10) -> Plan:
 
     plan.sort(key=lambda r: (-r["est_monthly_savings_usd"], r["metric"], r["id"]))
     return plan[: max(int(top), 0)]
+
+
+def filter_plan(
+    plan: Plan, levers: Sequence[str] | None = None, min_savings: float = 0.0
+) -> Plan:
+    """Keep only recommendations matching ``levers`` and ``min_savings``."""
+    wanted = set(levers) if levers else None
+    kept = []
+    for rec in plan:
+        if wanted is not None and rec.get("lever") not in wanted:
+            continue
+        if float(rec.get("est_monthly_savings_usd", 0.0) or 0.0) < min_savings:
+            continue
+        kept.append(rec)
+    return kept
 
 
 def what_if_drop_tag(store: Any, metric: str, tag: str) -> dict[str, Any]:

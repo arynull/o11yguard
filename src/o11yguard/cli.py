@@ -19,7 +19,14 @@ from typing import TYPE_CHECKING
 from . import __version__
 from .analyze import format_human, summarize, to_json
 from .ingest import ingest_file
-from .plan import build_plan, format_md, to_yaml, what_if_drop_tag
+from .plan import (
+    LEVER_NAMES,
+    build_plan,
+    filter_plan,
+    format_md,
+    to_yaml,
+    what_if_drop_tag,
+)
 from .plan import to_json as plan_to_json
 from .pricing import PER_1K_SERIES_DEFAULT
 from .sample import built_in_sample
@@ -152,8 +159,16 @@ def cmd_plan(args: argparse.Namespace) -> int:
     """Print ranked cost-saving recommendations for the stored records."""
     if args.top < 0:
         return _fail(f"--top must be >= 0, got {args.top}")
+    unknown = [lever for lever in (args.lever or []) if lever not in LEVER_NAMES]
+    if unknown:
+        return _fail(f"unknown lever: {unknown[0]} (valid: {', '.join(LEVER_NAMES)})")
+    if args.min_savings < 0:
+        return _fail(f"--min-savings must be >= 0, got {args.min_savings}")
     with Store() as store:
         recommendations = build_plan(store, top=args.top)
+    recommendations = filter_plan(
+        recommendations, levers=args.lever, min_savings=args.min_savings
+    )
     if args.format == "yaml":
         print(to_yaml(recommendations), end="")
     elif args.format == "json":
@@ -325,6 +340,22 @@ def add_plan(subparsers: _SubParsersAction) -> argparse.ArgumentParser:
         choices=["md", "yaml", "json"],
         default="md",
         help="output format (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--lever",
+        action="append",
+        default=None,
+        metavar="LEVER",
+        help="only show recommendations from this lever; repeatable"
+        " (valid: drop-tag, rollup, move-to-logs, reduce-retention, sample,"
+        " decommission)",
+    )
+    parser.add_argument(
+        "--min-savings",
+        type=float,
+        default=0.0,
+        help="only show recommendations with at least this much estimated"
+        " monthly savings in USD (default: %(default)s)",
     )
     parser.set_defaults(func=cmd_plan)
     return parser
