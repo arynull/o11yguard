@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "o11yguard"
-version = "0.1.0"
+version = "0.1.3"
 description = "Read-only cost control for your observability bill"
 license = { text = "MIT" }
 authors = [{ name = "Ary" }]
