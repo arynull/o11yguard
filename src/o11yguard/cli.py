@@ -190,6 +190,22 @@ def cmd_series_list(args: argparse.Namespace) -> int:
             for record in records
             if str(record.get("metric", "")).startswith(args.metric)
         ]
+    if args.sort == "name":
+        records = sorted(
+            records,
+            key=lambda record: (
+                str(record.get("metric", "")),
+                -float(record.get("monthly_cost_usd", 0.0) or 0.0),
+            ),
+        )
+    else:
+        records = sorted(
+            records,
+            key=lambda record: (
+                -float(record.get("monthly_cost_usd", 0.0) or 0.0),
+                str(record.get("metric", "")),
+            ),
+        )
     rows = records[: args.limit]
 
     if args.json:
@@ -384,6 +400,13 @@ def add_series(subparsers: _SubParsersAction) -> argparse.ArgumentParser:
         help="max rows (default: %(default)s)",
     )
     list_p.add_argument(
+        "--sort",
+        choices=["cost", "name"],
+        default="cost",
+        help="sort order: 'cost' (highest monthly cost first) or"
+        " 'name' (alphabetical by metric) (default: %(default)s)",
+    )
+    list_p.add_argument(
         "--json", action="store_true", help="emit JSON instead of a table"
     )
     list_p.set_defaults(func=cmd_series_list)
@@ -430,15 +453,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return a process exit code.
 
-    ``--version``/``--help`` exit ``0``; argparse usage errors exit ``1`` so
-    that code ``2`` keeps its meaning of budget breach.
+    ``--version``/``--help`` exit ``0``; argparse usage errors exit ``2``
+    (argparse's own convention, e.g. an invalid ``--sort`` value).
     """
     parser = build_parser()
     try:
         args = parser.parse_args(None if argv is None else list(argv))
     except SystemExit as exc:  # --version, --help, or a usage error
         code = exc.code
-        return EXIT_OK if code in (0, None) else EXIT_ERROR
+        if code in (0, None):
+            return EXIT_OK
+        return code if isinstance(code, int) else EXIT_ERROR
     func = getattr(args, "func", None)
     if func is None:
         parser.print_help(sys.stderr)

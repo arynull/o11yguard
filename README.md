@@ -201,14 +201,16 @@ List stored series records, optionally filtered by metric prefix. Read-only.
     o11yguard series list
     o11yguard series list --metric web. --limit 5
     o11yguard series list --limit 50 --json
+    o11yguard series list --sort name
 
 Flags:
 
 - `--metric PREFIX` (default: all): only metrics starting with this prefix.
 - `--limit N` (default: `20`): max rows. Must be >= 0.
+- `--sort cost|name` (default: `cost`): `cost` orders by highest monthly cost first; `name` orders alphabetically by metric. An invalid value is an argparse error (exit 2).
 - `--json`: emit machine-stable JSON instead of the table.
 
-Human output is a table with `METRIC`, `SERIES`, `EST. $/MO`, and `TAGS` columns, ordered by cost descending. Prints `no series stored (nothing ingested yet)` when empty.
+Human output is a table with `METRIC`, `SERIES`, `EST. $/MO`, and `TAGS` columns, ordered by cost descending (or alphabetically by metric with `--sort name`). Prints `no series stored (nothing ingested yet)` when empty.
 
 ### o11yguard series drop-tag
 
@@ -332,11 +334,11 @@ Default rate: $45.00 per 1k series/month. This is an estimate derived from Datad
 ## Exit codes
 
     0  ok (including --version/--help; budget status ok)
-    1  user error: bad input, unknown file, unknown metric/tag, missing budget, usage error
-    2  budget breached on `budget status` (run rate >= budget)
+    1  user error: bad input, unknown file, unknown metric/tag, missing budget
+    2  argparse usage error (bad flag/value, e.g. `--sort bogus`); also budget breached on `budget status` (run rate >= budget)
     3  warn threshold crossed on `budget status` (run rate >= budget * warn_pct / 100)
 
-Note: argparse usage errors (bad flags) exit 1, so code 2 keeps its breach meaning. `budget status` with no budget set exits 1.
+Note: argparse usage errors (bad flags) exit 2, matching argparse's own convention. `budget status` with no budget set exits 1.
 
 ## Data & state
 
