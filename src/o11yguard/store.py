@@ -125,7 +125,8 @@ class Store:
                 (float(amount), float(warn_pct), now),
             )
         budget = self.get_budget()
-        assert budget is not None  # just inserted
+        if budget is None:
+            raise RuntimeError("budget missing after insert")
         return budget
 
     def get_budget(self) -> dict | None:
